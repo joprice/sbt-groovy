@@ -4,9 +4,9 @@ name := "sbt-groovy"
 
 organization := "org.softnetwork.sbt.plugins"
 
-version := "0.1.3"
+version := "0.1.4-SNAPSHOT"
 
-scalaVersion := "2.10.4"
+scalaVersion := "2.10.6"
 
 publishMavenStyle := true
 
@@ -42,3 +42,14 @@ pomExtra := (
       <url>http://www.linkedin.com/in/smanciot</url>
     </developer>
   </developers>)
+
+ScriptedPlugin.scriptedSettings
+
+scriptedLaunchOpts ++= Seq(
+  "-Xmx2048M", 
+  "-XX:MaxMetaspaceSize=512M",
+  s"-Dplugin.version=${version.value}"
+)
+
+scriptedBufferLog := false
+
