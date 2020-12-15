@@ -4,3 +4,5 @@ enablePlugins(GroovyPlugin)
 
 configs(Groovy, GroovyTest)
 
+scalaVersion := "2.12.11"
+

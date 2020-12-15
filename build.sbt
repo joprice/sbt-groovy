@@ -1,4 +1,4 @@
-sbtPlugin := true
+enablePlugins(SbtPlugin)
 
 name := "sbt-groovy"
 
@@ -6,7 +6,7 @@ organization := "org.softnetwork.sbt.plugins"
 
 version := "0.1.4-SNAPSHOT"
 
-scalaVersion := "2.10.6"
+scalaVersion := "2.12.11"
 
 publishMavenStyle := true
 
@@ -42,8 +42,6 @@ pomExtra := (
       <url>http://www.linkedin.com/in/smanciot</url>
     </developer>
   </developers>)
-
-ScriptedPlugin.scriptedSettings
 
 scriptedLaunchOpts ++= Seq(
   "-Xmx2048M", 

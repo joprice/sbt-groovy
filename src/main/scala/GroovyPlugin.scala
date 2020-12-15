@@ -26,8 +26,8 @@ object GroovyPlugin extends AutoPlugin { self =>
       "org.codehaus.groovy" % "groovy-all" % groovyVersion.value % config.name,
       "org.apache.ant" % "ant" % "1.8.4" % config.name
     ),
-    managedClasspath in groovyc <<= (classpathTypes in groovyc, update) map { (ct, report) =>
-      Classpaths.managedJars(config, ct, report)
+    managedClasspath in groovyc := {
+      Classpaths.managedJars(config, (classpathTypes in groovyc).value, update.value)
     }
   )
 
@@ -42,38 +42,39 @@ object GroovyPlugin extends AutoPlugin { self =>
       groovySource in Compile := (sourceDirectory in Compile).value / "groovy",
       unmanagedSourceDirectories in Compile += {(groovySource in Compile).value},
       classDirectory in (Groovy , groovyc) := (crossTarget in Compile).value / "groovy-classes",
-      managedClasspath in groovyc <<= (classpathTypes in groovyc, update) map { (ct, report) =>
-          Classpaths.managedJars(Groovy, ct, report)
+      managedClasspath in groovyc := {
+          Classpaths.managedJars(Groovy, (classpathTypes in groovyc).value, update.value)
       },
-      groovyc in Compile := {
+      groovyc in Compile := Def.taskDyn {
         val sourceDirectory : File = (groovySource in Compile).value
-        val nb = (sourceDirectory ** "*.groovy").get.size
-        if(nb > 0){
-	        val s: TaskStreams = streams.value
-          s.log.info(s"Start Compiling Groovy sources : ${sourceDirectory.getAbsolutePath} ")
+        val s: TaskStreams = streams.value
+        Def.taskIf {
+          val nb = (sourceDirectory ** "*.groovy").get.size
+          if (nb > 0) {
+            s.log.info(s"Start Compiling Groovy sources : ${sourceDirectory.getAbsolutePath} ")
 
-          val classDirectories: Seq[File] = classDirectory.all(compileFilter).value ++
-              classDirectory.all(groovycFilter).value ++
-              Seq((classDirectory in Compile).value)
+            val classDirectories: Seq[File] = classDirectory.all(compileFilter).value ++
+                classDirectory.all(groovycFilter).value ++
+                Seq((classDirectory in Compile).value)
 
-          val classpath : Seq[File] = (managedClasspath in groovyc).value.files ++ classDirectories ++ (managedClasspath in Compile).value.files
-          s.log.debug(classpath.mkString(";"))
-	        val stubDirectory : File = (sourceManaged in Compile).value
-	        val destinationDirectory : File = (classDirectory in (Groovy, groovyc)).value
+            val classpath : Seq[File] = (managedClasspath in groovyc).value.files ++ classDirectories ++ (managedClasspath in Compile).value.files
+            s.log.debug(classpath.mkString(";"))
+            val stubDirectory : File = (sourceManaged in Compile).value
+            val destinationDirectory : File = (classDirectory in (Groovy, groovyc)).value
 
-	        new GroovyC(classpath, sourceDirectory, stubDirectory, destinationDirectory).compile()
+            new GroovyC(classpath, sourceDirectory, stubDirectory, destinationDirectory).compile()
 
-          ((destinationDirectory ** "*.class").get pair relativeTo(destinationDirectory)).map{case(k,v) =>
-            IO.copyFile(k, (resourceManaged in Compile).value / v, preserveLastModified = true)
-            (resourceManaged in Compile).value / v
+            ((destinationDirectory ** "*.class").get pair relativeTo(destinationDirectory)).map{case(k,v) =>
+              IO.copyFile(k, (resourceManaged in Compile).value / v, preserveLastModified = true)
+              (resourceManaged in Compile).value / v
+            }
+          } else {
+            Seq.empty
           }
         }
-        else{
-          Seq.empty
-        }
-      },
-      resourceGenerators in Compile <+= groovyc in Compile,
-      groovyc in Compile <<= (groovyc in Compile) dependsOn (compile in Compile)
+      }.value,
+      resourceGenerators in Compile += (groovyc in Compile),
+      groovyc in Compile := (groovyc in Compile).dependsOn(compile in Compile).value
     )
   }
 
@@ -84,48 +85,51 @@ object GroovyPlugin extends AutoPlugin { self =>
     lazy val compileTestFilter : ScopeFilter = ScopeFilter(inDependencies(ThisProject, transitive = true, includeRoot = false), inConfigurations(Test))
 
     lazy val settings = Seq(ivyConfigurations += GroovyTest) ++ inConfig(GroovyTest)(Defaults.testTasks ++ Seq(
-      definedTests <<= definedTests in Test,
-      definedTestNames <<= definedTestNames in Test,
-      fullClasspath <<= fullClasspath in Test)) ++ defaultSettings(GroovyTest) ++ Seq(
+      definedTests := (definedTests in Test).value,
+      definedTestNames := (definedTestNames in Test).value,
+      fullClasspath := (fullClasspath in Test).value
+    )) ++ defaultSettings(GroovyTest) ++ Seq(
 
       groovySource in Test := (sourceDirectory in Test).value / "groovy",
       unmanagedSourceDirectories in Test += {(groovySource in Test).value},
       classDirectory in (GroovyTest, groovyc) := (crossTarget in Test).value / "groovy-test-classes",
-      managedClasspath in groovyc <<= (classpathTypes in groovyc, update) map { (ct, report) =>
-        Classpaths.managedJars(GroovyTest, ct, report)
+      managedClasspath in groovyc := {
+        Classpaths.managedJars(GroovyTest, (classpathTypes in groovyc).value, update.value)
       },
-      groovyc in Test := {
+      groovyc in Test := Def.taskDyn {
         val sourceDirectory : File = (groovySource in Test).value
-        val nb = (sourceDirectory ** "*.groovy").get.size
-        if(nb > 0){
-	        val s: TaskStreams = streams.value
-	        s.log.info(s"Start Compiling Test Groovy sources : ${sourceDirectory.getAbsolutePath} ")
+        val s: TaskStreams = streams.value
+        Def.taskIf {
+          val nb = (sourceDirectory ** "*.groovy").get.size
+          if(nb > 0){
+            s.log.info(s"Start Compiling Test Groovy sources : ${sourceDirectory.getAbsolutePath} ")
 
-          val classDirectories: Seq[File] = classDirectory.all(groovy.compileFilter).value ++
-            classDirectory.all(groovy.groovycFilter).value ++ classDirectory.all(compileTestFilter).value ++
-            classDirectory.all(groovycTestFilter).value ++
-            Seq((classDirectory in Compile).value, (classDirectory in (Groovy, groovyc)).value)
+            val classDirectories: Seq[File] = classDirectory.all(groovy.compileFilter).value ++
+              classDirectory.all(groovy.groovycFilter).value ++ classDirectory.all(compileTestFilter).value ++
+              classDirectory.all(groovycTestFilter).value ++
+              Seq((classDirectory in Compile).value, (classDirectory in (Groovy, groovyc)).value)
 
-          val classpath : Seq[File] = (managedClasspath in groovyc).value.files ++ classDirectories ++ (managedClasspath in Test).value.files
-          s.log.debug(classpath.mkString(";"))
+            val classpath : Seq[File] = (managedClasspath in groovyc).value.files ++ classDirectories ++ (managedClasspath in Test).value.files
+            s.log.debug(classpath.mkString(";"))
 
-	        val stubDirectory : File = (sourceManaged in Test).value
+            val stubDirectory : File = (sourceManaged in Test).value
 
-	        val destinationDirectory : File = (classDirectory in (GroovyTest, groovyc)).value
+            val destinationDirectory : File = (classDirectory in (GroovyTest, groovyc)).value
 
-	        new GroovyC(classpath, sourceDirectory, stubDirectory, destinationDirectory).compile()
+            new GroovyC(classpath, sourceDirectory, stubDirectory, destinationDirectory).compile()
 
-          ((destinationDirectory ** "*.class").get pair relativeTo(destinationDirectory)).map{case(k,v) =>
-            IO.copyFile(k, (resourceManaged in Test).value / v, preserveLastModified = true)
-            (resourceManaged in Test).value / v
+            ((destinationDirectory ** "*.class").get pair relativeTo(destinationDirectory)).map{case(k,v) =>
+              IO.copyFile(k, (resourceManaged in Test).value / v, preserveLastModified = true)
+              (resourceManaged in Test).value / v
+            }
+          }
+          else{
+            Seq.empty
           }
         }
-        else{
-          Seq.empty
-        }
-      },
-      resourceGenerators in Test <+= groovyc in Test,
-      groovyc in Test <<= (groovyc in Test) dependsOn (compile in Test)
+      }.value,
+      resourceGenerators in Test += (groovyc in Test),
+      groovyc in Test := (groovyc in Test).dependsOn(compile in Test).value
     )
   }
 }
